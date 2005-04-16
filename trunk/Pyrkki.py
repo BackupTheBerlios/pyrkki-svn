@@ -36,10 +36,4 @@ if __name__=='__main__':
     else:
         # this is the first version so only curses gui awailable
         gui = CursesGui()
-        
         gui.start()
-        
-
-
-
-

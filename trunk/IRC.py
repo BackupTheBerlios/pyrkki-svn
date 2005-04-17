@@ -64,7 +64,6 @@ class IRCChannel:
         self.nicks = list()
         self.mode = mode
         self.maxlines = 100
-        self.network =
 
     def add_line(self,line):
         if len(self.lines) < self.maxlines:

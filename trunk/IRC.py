@@ -64,6 +64,7 @@ class IRCChannel:
         self.nicks = list()
         self.mode = mode
         self.maxlines = 100
+        self.network =
 
     def add_line(self,line):
         if len(self.lines) < self.maxlines:
@@ -92,13 +93,13 @@ class IRCConnection:
 
         self.messages = IRCChannel("STATUS","no")
 
-
         #self.commands = dict([('JOIN',Join()),('PART',Part())])
         self.commands = list()
         self.commands.append(Join())
         self.commands.append(Part())
         self.commands.append(Msg())
         self.commands.append(Nick())
+        self.commands.append(Names())
 
     def connect(self):
         server = self.server
@@ -111,22 +112,24 @@ class IRCConnection:
         self.thread = IRCThread(server,self.messageparser)
         self.thread.start()
 
-        #nickmessage = 'NICK '+self.nick+'\r\n'
-        #server.send ( nickmessage )
         self.message('/nick '+self.nick)
 
         usermessage = 'USER '+user+' '+user+' '+user+' :'+username+'\r\n'
         server.send ( usermessage )
-        #self.message('/user'
 
-
-
+    def passmessagetogui(self,channelNM,wcommand, txtline,sender):
+        cha = self.get_channel(channelNM)
+        if cha != None: 
+            self.get_channel(channelNM).add_line(IRCMessage(str(sender),str(channelNM),txtline))
+        else:
+            cha = self.messages
+            cha.add_line(IRCMessage(str(sender),'PALVELIN',"TÄSTÄPUUTTUU LINE"))
+        self.messagefunk(cha,self.name,wcommand)
+        
     def messageparser(self,lines):
-
         myre = re.compile('#[\S]+')
         myre2 = re.compile('\s[\S]+\s')
-
-        channelNM = "STATUS"
+        channelNM = "STATUS" # default channel
         wcommand = "NONE"
 
         # THE MESSAGE PARSER OF ALL TIMES
@@ -180,7 +183,7 @@ class IRCConnection:
 
                 if res != None:
                     channelname = params[res.start():res.end()]
-                else:
+                else: # If message is not going to any channel put it in STATUS-channel
                     channelname = 'STATUS'
 
                 channelNM = channelname # this could mean trouble later
@@ -200,55 +203,49 @@ class IRCConnection:
                             self.channels.append(IRCChannel(channelname,"asd"))
                             wcommand = 'NEWWINDOW'
                         txtline = '<'+str(om)+'>'+nick+' joined '+channelNM
-
+                        self.passmessagetogui(channelNM,wcommand,txtline,sender)
                     elif command == 'PART':
                         if om == 1:
-                            self.channels.remove(self.get_channel(channelNM))
                             wcommand = 'REMOVEWINDOW'
+                            # pass information to GUI
+                            self.passmessagetogui(channelNM,wcommand,"PARTED",sender)
+                            self.channels.remove(self.get_channel(channelNM))
                         else:
                             txtline = ''+nick+' parted '+channelNM
-
+                            # pass information to GUI
+                            self.passmessagetogui(channelNM,wcommand,txtline,sender)
                     elif command == 'NICK':
                         newnick = params[params.find(':')+1:]
                         if om == 1:
                             self.nick = newnick
                         txtline = ''+nick+' is now know as '+newnick
-                        
+                        self.passmessagetogui(channelNM,wcommand,txtline,sender)
                     elif command == 'PRIVMSG':
                         res = myre.search(params)
                         if res is not None:
                             txtline = params[res.end()+2:]
                         else:
                             txtline = params
-
+                        self.passmessagetogui(channelNM,wcommand,txtline,sender)
                     else: # so its not one of those upper commands and not a number
                         txtline = ''+command+' '+params
-
+                        self.passmessagetogui(channelNM,wcommand,txtline,sender)
                 else: # number command
                     txtline = ''+params[params.find(self.nick)+len(self.nick)+1:]
+                    self.passmessagetogui(channelNM,wcommand,txtline,sender)
 
-                # lets see that the channel really exists
-                # incase of PART command there are no channel
-                cha = self.get_channel(channelNM)
-                if cha != None: 
-                    #self.get_channel(channelNM).add_line(IRCMessage(str(sender),str(channelNM),line))
-                    self.get_channel(channelNM).add_line(IRCMessage(str(sender),str(channelNM),txtline))
-                    #self.get_channel(channelNM).add_line(txtline)
-                else:
-                    cha = self.messages
-                    cha.add_line(IRCMessage(str(sender),'PALVELIN',line))
-                # send so it to GUI
-                self.messagefunk(cha,self.name,wcommand)
-                
+
             else: # this for commands that don't start with : example PING
                 # lets get that PING pois
-                if line.find('PING') != -1:
+                if line.find('PING') == -1:
                     cha = self.get_channel(channelNM).add_line(IRCMessage(str('KESKEN 1'+server),'KESKEN',line))
                     # send so it to GUI
-                    self.messagefunk(cha,self.name,wcommand)
+                    #self.passmessagetogui(channelNM,wcommand,txtline,sender)
+                    self.passmessagetogui(channelNM,wcommand,str(line),sender)
+                else:
+                    cha = self.get_channel(channelNM).add_line(IRCMessage(str('KESKEN 1'+server),'KESKEN',line))
+                    self.passmessagetogui(channelNM,wcommand,str(line),sender)
 
-
-                    
     def get_channel(self,name):
         if name == 'STATUS':
             return self.messages
@@ -257,17 +254,13 @@ class IRCConnection:
                 if name == channel.name:
                     return channel
 
-
     def message(self,mes,channel=''):
-
         num = mes.find(' ') # find the first space
         if num == -1: # no space found
             comm = mes
         else:
             comm = mes[:num] # first word
-
         comm = comm.upper() # make the command uppercase
-
         for command in self.commands:
             if command.name == comm:
                 msg = command.execute(mes[len(command.name)+1:],channel)
@@ -276,7 +269,6 @@ class IRCConnection:
                 else:
                     self.server.send( msg )
                     return 0
-
         # we parse it to channel
         if channel[:1] == '#' and len(channel)>1 and len(mes)>0:
             msg = 'PRIVMSG '+str(channel)+' :'+mes+'\r\n'
@@ -311,6 +303,12 @@ class Nick:
             return 'NICK '+message+'\r\n'
         else:
             return -1
+class Names:
+    def __init__(self):
+        self.name = '/NAMES'
+        self.helptxt = '/NAMES gives names visiable to user'
+    def execute(self,message,channel=''):
+        return 'NAMES '+channel+'\r\n' # this is not ready yet.
 
 class Msg:
     def __init__(self):

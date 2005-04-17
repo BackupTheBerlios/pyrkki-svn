@@ -91,8 +91,9 @@ class CursesGui:
         if command == 'NEWWINDOW':
             self.mwindows.append(channel)
             self.active_mwindow = len(self.mwindows)-1
-
-
+        elif command == 'REMOVEWINDOW':
+            self.active_mwindow = 0
+            self.mwindows.remove(channel)
         if self.mwindows[self.active_mwindow] == channel:
             for chanwin in self.mwindows:
                 if chanwin.name == channel.name:
@@ -145,12 +146,11 @@ class CursesGui:
     # here is the main function with the main loop etc.
     def start(self):
 
-        self.connections.append(IRCConnection('TESTI','192.168.1.2',6667,'pzq2','pasdzq2','pirssiyksi',self.update_window2))
-
+        self.connections.append(IRCConnection('TESTI','192.168.1.2',6667,'pzq2','asd2dasv','dyksi',self.update_window2))
         xasd = self.connections[self.con_num]
         xasd.connect()
         self.mwindows.append(xasd.messages)
-                      
+
         pirssion = 1
         
         # lets take some key input this just a quick method. Remember to fix later

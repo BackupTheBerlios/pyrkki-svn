@@ -61,10 +61,17 @@ class IRCChannel:
     def __init__(self,name,mode,_network):
         self.name = name
         self.lines = list()
-        self.nicks = list()
+        self.users = list()
         self.mode = mode
         self.maxlines = 100
         self.network = _network
+
+    def add_users(self,users):
+        for user in users:
+            try:
+                self.users.index(user)
+            except:
+                self.users.append(user)
 
     def add_line(self,line):
         if len(self.lines) < self.maxlines:
@@ -231,6 +238,11 @@ class IRCConnection:
                         txtline = ''+command+' '+params
                         self.passmessagetogui(channelNM,wcommand,txtline,sender)
                 else: # number command
+                    if int(command) == 353: # channel names is coming here
+                        nickstemp = params[params.find(':')+1:]
+                        nicks = nickstemp.split(' ')
+                        nicks = nicks[0:-1]
+                        self.get_channel(channelNM).add_users(nicks) 
                     txtline = ''+params[params.find(self.nick)+len(self.nick)+1:]
                     self.passmessagetogui(channelNM,wcommand,txtline,sender)
 

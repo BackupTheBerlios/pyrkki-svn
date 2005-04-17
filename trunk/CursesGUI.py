@@ -200,4 +200,5 @@ class CursesGui:
         nick = self.connections[self.con_num].nick
     
         chan.add_line(IRCMessage(str(nick),'itse',inputstring))
+        # chan.add_line(IRCMessage(str(nick),'itse',str(chan.users))) users
         self.update_window()

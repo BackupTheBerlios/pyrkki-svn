@@ -54,8 +54,13 @@ class CursesGui:
         self.typewin.keypad(1)
 
         # message win
-        self.messagewin = curses.newwin(y-2,x,0,0)
+        # self.messagewin = curses.newwin(y-2,x,0,0) # orginal without the nickwin
+        self.messagewin = curses.newwin(y-2,x-10,0,0) # nick lengt is 9 char should be done dynamically
+        # so that windows size should depend on nick lenghts
 
+        # nick win
+        self.nickwin = curses.newwin(y-2,10,0,x-10) # should also be dynamic
+        
         # list of our window (channel)
         self.mwindows = list()
         self.active_mwindow = 0
@@ -64,7 +69,7 @@ class CursesGui:
         self.messagewin.refresh()
         self.statuswin.refresh()
         self.statuswin2.refresh()
-        self.typewin.refresh()        
+        self.typewin.refresh()
 
     def update_status(self):
         # update the status bar
@@ -72,12 +77,25 @@ class CursesGui:
         chan = self.mwindows[self.active_mwindow]
         self.statuswin.addstr(0,0,'['+self.connections[self.con_num].name+'] '+chan.name+' '+str(self.mwindows.index(chan)))
 
+    def update_nickwin(self):
+        self.nickwin.clear()
+        chan = self.mwindows[self.active_mwindow]
+        x = 0
+        maxy,maxx = self.scr.getmaxyx()
+        for user in chan.users:
+            self.nickwin.addstr(x,0,user)
+            x = x + 1
+            if x+3 > maxx: # break if too many nicks to fit window
+                break
+        self.nickwin.refresh()
+        
     # draw the window again
     def update_window(self):
         channel = self.mwindows[self.active_mwindow]
         self.draw_lines_to_message_win(channel)
 
         self.update_status()
+        self.update_nickwin()
         # refresh the windows
         self.messagewin.refresh()
         self.statuswin.refresh()
@@ -97,6 +115,7 @@ class CursesGui:
                 if chanwin.name == channel.name:
                     self.draw_lines_to_message_win(channel)
         self.update_status()
+        self.update_nickwin()
         # refresh the windows
         self.messagewin.refresh()
         self.statuswin.refresh()

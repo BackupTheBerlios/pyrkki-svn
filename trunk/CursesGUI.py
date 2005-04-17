@@ -72,8 +72,6 @@ class CursesGui:
         chan = self.mwindows[self.active_mwindow]
         self.statuswin.addstr(0,0,'['+self.connections[self.con_num].name+'] '+chan.name+' '+str(self.mwindows.index(chan)))
 
-
-
     # draw the window again
     def update_window(self):
         channel = self.mwindows[self.active_mwindow]
@@ -87,20 +85,18 @@ class CursesGui:
         self.typewin.refresh()        
 
     def update_window2(self,channel,network,command):
-
         if command == 'NEWWINDOW':
             self.mwindows.append(channel)
             self.active_mwindow = len(self.mwindows)-1
         elif command == 'REMOVEWINDOW':
             self.active_mwindow = 0
             self.mwindows.remove(channel)
+            self.update_window() 
         if self.mwindows[self.active_mwindow] == channel:
             for chanwin in self.mwindows:
                 if chanwin.name == channel.name:
                     self.draw_lines_to_message_win(channel)
-
         self.update_status()
-        
         # refresh the windows
         self.messagewin.refresh()
         self.statuswin.refresh()
@@ -108,13 +104,11 @@ class CursesGui:
         self.typewin.refresh()        
 
     def draw_lines_to_message_win(self,channel):
-
         # first clear the window
         self.messagewin.clear()
         lines = channel.lines
         mwy,mwx = self.messagewin.getmaxyx()
         currentline = 0
-
         lines.reverse()
         # get the lines for lines
         splittedlines = list()
@@ -139,20 +133,16 @@ class CursesGui:
                 currentline = currentline + 1
             else:
                 break
-            
         lines.reverse()
 
             
     # here is the main function with the main loop etc.
     def start(self):
-
         self.connections.append(IRCConnection('TESTI','192.168.1.2',6667,'pzq2','asd2dasv','dyksi',self.update_window2))
         xasd = self.connections[self.con_num]
         xasd.connect()
         self.mwindows.append(xasd.messages)
-
         pirssion = 1
-        
         # lets take some key input this just a quick method. Remember to fix later
         while pirssion == 1:
             inputstring = ''

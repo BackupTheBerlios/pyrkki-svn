@@ -58,12 +58,13 @@ class IRCThread(Thread):
 
 
 class IRCChannel:
-    def __init__(self,name,mode):
+    def __init__(self,name,mode,_network):
         self.name = name
         self.lines = list()
         self.nicks = list()
         self.mode = mode
         self.maxlines = 100
+        self.network = _network
 
     def add_line(self,line):
         if len(self.lines) < self.maxlines:
@@ -90,7 +91,7 @@ class IRCConnection:
 
         self.channels = list()
 
-        self.messages = IRCChannel("STATUS","no")
+        self.messages = IRCChannel("STATUS","no",self.name)
 
         #self.commands = dict([('JOIN',Join()),('PART',Part())])
         self.commands = list()
@@ -199,7 +200,7 @@ class IRCConnection:
                             
                     if command == 'JOIN':
                         if om == 1:
-                            self.channels.append(IRCChannel(channelname,"asd"))
+                            self.channels.append(IRCChannel(channelname,"asd",self.name))
                             wcommand = 'NEWWINDOW'
                         txtline = '<'+str(om)+'>'+nick+' joined '+channelNM
                         self.passmessagetogui(channelNM,wcommand,txtline,sender)

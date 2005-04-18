@@ -67,6 +67,7 @@ class IRCChannel:
         self.network = _network
 
     def add_users(self,users):
+        self.users = list() # clear the list
         for user in users:
             try:
                 self.users.index(user)
@@ -210,6 +211,8 @@ class IRCConnection:
                             self.channels.append(IRCChannel(channelname,"asd",self.name))
                             wcommand = 'NEWWINDOW'
                         txtline = '<'+str(om)+'>'+nick+' joined '+channelNM
+                        # ask /names from channel to update channel.users
+                        self.message('/NAMES',channelNM)
                         self.passmessagetogui(channelNM,wcommand,txtline,sender)
                     elif command == 'PART':
                         if om == 1:
@@ -219,6 +222,8 @@ class IRCConnection:
                             self.channels.remove(self.get_channel(channelNM))
                         else:
                             txtline = ''+nick+' parted '+channelNM
+                            # ask /names from channel to update channel.users
+                            self.message('/NAMES',channelNM)
                             # pass information to GUI
                             self.passmessagetogui(channelNM,wcommand,txtline,sender)
                     elif command == 'NICK':

@@ -65,9 +65,12 @@ class IRCChannel:
         self.mode = mode
         self.maxlines = 100
         self.network = _network
+        self.namesopen = 0
 
     def add_users(self,users):
-        self.users = list() # clear the list
+        if self.namesopen == 0:
+            self.users = list() # clear the list
+            self.namesopen = 1 # waiting for more users
         for user in users:
             try:
                 self.users.index(user)
@@ -247,9 +250,15 @@ class IRCConnection:
                         nickstemp = params[params.find(':')+1:]
                         nicks = nickstemp.split(' ')
                         nicks = nicks[0:-1]
-                        self.get_channel(channelNM).add_users(nicks) 
-                    txtline = ''+params[params.find(self.nick)+len(self.nick)+1:]
-                    self.passmessagetogui(channelNM,wcommand,txtline,sender)
+                        self.get_channel(channelNM).add_users(nicks)
+                        self.passmessagetogui(channelNM,'NAMES','',sender)
+                        # no names txt to GUI
+                    elif int(command) == 366: # end of names list
+                        self.get_channel(channelNM).namesopen=0
+                        self.passmessagetogui(channelNM,'NAMES','',sender)
+                    else:
+                        txtline = ''+params[params.find(self.nick)+len(self.nick)+1:]
+                        self.passmessagetogui(channelNM,wcommand,txtline,sender)
 
 
             else: # this for commands that don't start with : example PING

@@ -85,7 +85,7 @@ class CursesGui:
         for user in chan.users:
             self.nickwin.addstr(x,0,user)
             x = x + 1
-            if x+3 > maxx: # break if too many nicks to fit window
+            if x+3 > maxy: # break if too many nicks to fit window
                 break
         self.nickwin.refresh()
         
@@ -109,7 +109,9 @@ class CursesGui:
         elif command == 'REMOVEWINDOW':
             self.active_mwindow = 0
             self.mwindows.remove(channel)
-            self.update_window() 
+            self.update_window()
+        elif command == 'NAMES':
+            self.update_nickwin() # fix later
         if self.mwindows[self.active_mwindow] == channel:
             for chanwin in self.mwindows:
                 if chanwin.name == channel.name:
@@ -131,24 +133,28 @@ class CursesGui:
         lines.reverse()
         # get the lines for lines
         splittedlines = list()
+        # remember to fix later so that it will not slit words
+        # it it is not necessery
         for line in lines:
             pituus = len(line.sender)+3
-            pituus2 = mwx -1 -pituus
+            pituus2 = mwx -1 - pituus
             x = 0
             templines = list()
             while x < len(line.text):
-                #sline = '<'+line.sender+'> ' +line.text[x:mwx-1 -pituus]
-                sline = '<'+line.sender+'> ' +line.text[x:pituus2 +x]
-                x = x + mwx -1 - pituus
+                sline = '<'+line.sender+'> ' +line.text[x:x+pituus2]
+                x = x + pituus2
                 templines.append(sline)
             templines.reverse()
-            for tline in templines:
-                splittedlines.append(tline)
+            splittedlines.extend(templines)
         numlines = len(splittedlines)
         # put the splitted lines to screen
         for line in splittedlines:
             if currentline < mwy:
-                self.messagewin.addstr(mwy - currentline -1, 0,line)
+                try:
+                    self.messagewin.addstr(mwy - currentline -1, 0,line)
+                except:
+                    self.messagewin.addstr(mwy - currentline -1, 0,'FATAL ERROR')
+                #self.messagewin.addstr(mwy - currentline -1, 0,line[0:10])
                 currentline = currentline + 1
             else:
                 break

@@ -30,8 +30,7 @@ class CursesGui:
     def __init__(self):
 
         # number if active connection
-        self.con_num=0
-        self.connections = list()
+        self.irc = IRC()
         
         # init the screen
         self.scr = curses.initscr()
@@ -54,7 +53,6 @@ class CursesGui:
         self.typewin.keypad(1)
 
         # message win
-        # self.messagewin = curses.newwin(y-2,x,0,0) # orginal without the nickwin
         self.messagewin = curses.newwin(y-2,x-10,0,0) # nick lengt is 9 char should be done dynamically
         # so that windows size should depend on nick lenghts
 
@@ -75,7 +73,7 @@ class CursesGui:
         # update the status bar
         self.statuswin.clear()
         chan = self.mwindows[self.active_mwindow]
-        self.statuswin.addstr(0,0,'['+self.connections[self.con_num].name+'] '+chan.name+' '+str(self.mwindows.index(chan)))
+        self.statuswin.addstr(0,0,'['+chan.server+'] '+chan.name+' '+str(self.mwindows.index(chan)))
 
     def update_nickwin(self):
         self.nickwin.clear()
@@ -93,7 +91,6 @@ class CursesGui:
     def update_window(self):
         channel = self.mwindows[self.active_mwindow]
         self.draw_lines_to_message_win(channel)
-
         self.update_status()
         self.update_nickwin()
         # refresh the windows
@@ -154,7 +151,6 @@ class CursesGui:
                     self.messagewin.addstr(mwy - currentline -1, 0,line)
                 except:
                     self.messagewin.addstr(mwy - currentline -1, 0,'FATAL ERROR')
-                #self.messagewin.addstr(mwy - currentline -1, 0,line[0:10])
                 currentline = currentline + 1
             else:
                 break
@@ -163,10 +159,12 @@ class CursesGui:
             
     # here is the main function with the main loop etc.
     def start(self):
-        self.connections.append(IRCConnection('TESTI','192.168.1.2',6667,'pzq2','asd2dasv','dyksi',self.update_window2))
-        xasd = self.connections[self.con_num]
-        xasd.connect()
-        self.mwindows.append(xasd.messages)
+        self.irc.connect('ORJAnet','192.168.1.2',6667,'pzq2','asd2dasv','dyksi',self.update_window2)
+        self.irc.start()
+
+        currentserver = 0
+        self.mwindows.append(self.irc.messages)
+        # self.irc.connect('EFnet','someserverhere',6667,'pzq2','asd2dasv','dyksi',self.update_window2)
         pirssion = 1
         # lets take some key input this just a quick method. Remember to fix later
         while pirssion == 1:
@@ -194,6 +192,14 @@ class CursesGui:
                     if self.active_mwindow > 0:
                         self.active_mwindow = self.active_mwindow -1
                         self.update_window()
+                    else: # change active connection
+                        if len(self.irc.servers) > currentserver+1:
+                            currentserver = currentserver + 1
+                            self.irc.messages.server = self.irc.servers[currentserver].name
+                        else:
+                            currentserver = 0
+                            self.irc.messages.server = self.irc.servers[currentserver].name
+                        
                 elif inputchar == 261:
                     if len(self.mwindows)-1 > self.active_mwindow:
                         self.active_mwindow = self.active_mwindow +1
@@ -210,7 +216,8 @@ class CursesGui:
 
             if channel == 'STATUS':
                 channel = ''
-            self.connections[self.con_num].message(inputstring,channel)
+            self.irc.message(inputstring,self.mwindows[self.active_mwindow].server,channel)
+
             self.typewin.erase()
             
 
@@ -220,10 +227,7 @@ class CursesGui:
         curses.endwin()
 
     def putmessagetoscreen(self,inputstring):
-
         chan = self.mwindows[self.active_mwindow]
-        nick = self.connections[self.con_num].nick
-    
+        nick = self.irc.get_server(chan.server).nick
         chan.add_line(IRCMessage(str(nick),'itse',inputstring))
-        # chan.add_line(IRCMessage(str(nick),'itse',str(chan.users))) users
         self.update_window()

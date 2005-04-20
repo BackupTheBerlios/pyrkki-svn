@@ -22,7 +22,7 @@
 import socket
 import thread
 import re
-
+import Queue
 import os
 import sys
 
@@ -34,37 +34,45 @@ class IRCMessage:
         self.to = to
         self.text = text
 
-class IRCThread(Thread):
-    def __init__(self, irc,messagefunk):
-        Thread.__init__(self)
-        self.irc = irc
+class QueueMessage:
+    def __init__(self,lines,name):
+        self.lines = lines
+        self.name = name
 
-        self.messagefunk = messagefunk
+class IRCServer(Thread):
+    def __init__(self,name,serverIP, port, nick,user,username,messagequeue):
+        Thread.__init__(self)
+        self.name = name
+        self.serverIP = serverIP
+        self.port = port
+        self.nick = nick
+        self.user = user
+        self.username = username
+        self.messagequeue = messagequeue
+        self.socket = socket.socket ( socket.AF_INET, socket.SOCK_STREAM )
 
     def run(self):
-
         while True:
-            data = self.irc.recv ( 4096 )
-
+            data = self.socket.recv ( 4096 )
             # raw lines splitted with irc protocols line end mark
             # problem is that it leaves one empty line so we have
             # to send all but last lines to messagefunk
             lines = data.split('\r\n')
-            self.messagefunk(lines[0:-1])
+            self.messagequeue.put(QueueMessage(lines[0:-1],self.name))
 
             # return to ping with pong
             if data.find ( 'PING' ) != -1:
-                self.irc.send ( 'PONG ' + data.split() [ 1 ] + '\r\n' )
+                self.socket.send ( 'PONG ' + data.split() [ 1 ] + '\r\n' )
 
 
 class IRCChannel:
-    def __init__(self,name,mode,_network):
+    def __init__(self,name,mode,_server):
         self.name = name
         self.lines = list()
         self.users = list()
         self.mode = mode
         self.maxlines = 100
-        self.network = _network
+        self.server = _server
         self.namesopen = 0
 
     def add_users(self,users):
@@ -87,24 +95,14 @@ class IRCChannel:
         return len(self.lines)
 
 #connectiossa pitaa olla ainakin vunktio message, joka otta guilta vastaan viestia
-class IRCConnection:
-    def __init__(self,name,serverIP, port, nick,user,username,messfunk):
-        self.name = name
-        self.serverIP = serverIP
-        self.port = port
-        self.nick = nick
-        self.user = user
-        self.username = username
-
-        self.messagefunk = messfunk
-        self.server = socket.socket ( socket.AF_INET, socket.SOCK_STREAM )
-        #do the join commands etc
-
+class IRC(Thread):
+    def __init__(self):
+        Thread.__init__(self)
         self.channels = list()
+        self.messages = IRCChannel("STATUS","no","STATUS") # status channel
+        self.messagequeue = Queue.Queue()
+        self.servers = list()
 
-        self.messages = IRCChannel("STATUS","no",self.name)
-
-        #self.commands = dict([('JOIN',Join()),('PART',Part())])
         self.commands = list()
         self.commands.append(Join())
         self.commands.append(Part())
@@ -112,21 +110,26 @@ class IRCConnection:
         self.commands.append(Nick())
         self.commands.append(Names())
 
-    def connect(self):
-        server = self.server
-        user = self.user
-        username = self.username
-        
-        server.connect ( ( self.serverIP, self.port ) )
-        server.recv ( 4096 )
-
-        self.thread = IRCThread(server,self.messageparser)
-        self.thread.start()
-
-        self.message('/nick '+self.nick)
-
+    def connect(self,name,serverIP, port, nick,user,username,messfunk):
+        self.messagefunk = messfunk
+        serv = IRCServer(name,serverIP,port,nick,user,username,self.messagequeue)
+        serv.socket.connect ( ( serverIP, port ) )
+        serv.socket.recv ( 4096 )
+        serv.start()
+        muss = 'NICK '+nick+'\r\n'
+        serv.socket.send(muss)
         usermessage = 'USER '+user+' '+user+' '+user+' :'+username+'\r\n'
-        server.send ( usermessage )
+        serv.socket.send ( usermessage )
+        if len(self.servers) == 0:
+            self.messages.server = serv.name
+        self.servers.append(serv)
+
+    def run(self):
+        while True:
+            x = self.messagequeue.get()
+            # FIX LATER
+            server = self.get_server(x.name)
+            self.messageparser(x.lines,server)
 
     def passmessagetogui(self,channelNM,wcommand, txtline,sender):
         cha = self.get_channel(channelNM)
@@ -135,13 +138,16 @@ class IRCConnection:
         else:
             cha = self.messages
             cha.add_line(IRCMessage(str(sender),'PALVELIN',"TÄSTÄPUUTTUU LINE"))
-        self.messagefunk(cha,self.name,wcommand)
+        self.messagefunk(cha,'REMEBER TO FIX LATER',wcommand)
         
-    def messageparser(self,lines):
+    def messageparser(self,lines,sserver):
         myre = re.compile('#[\S]+')
         myre2 = re.compile('\s[\S]+\s')
         channelNM = "STATUS" # default channel
         wcommand = "NONE"
+
+        self.name = sserver.name
+        self.nick = sserver.nick
 
         # THE MESSAGE PARSER OF ALL TIMES
         # MESSAGES ARE IN FOLLOWING FORMAT
@@ -215,7 +221,7 @@ class IRCConnection:
                             wcommand = 'NEWWINDOW'
                         txtline = '<'+str(om)+'>'+nick+' joined '+channelNM
                         # ask /names from channel to update channel.users
-                        self.message('/NAMES',channelNM)
+                        self.message('/NAMES',sserver,channelNM)
                         self.passmessagetogui(channelNM,wcommand,txtline,sender)
                     elif command == 'PART':
                         if om == 1:
@@ -226,7 +232,7 @@ class IRCConnection:
                         else:
                             txtline = ''+nick+' parted '+channelNM
                             # ask /names from channel to update channel.users
-                            self.message('/NAMES',channelNM)
+                            self.message('/NAMES',sserver,channelNM)
                             # pass information to GUI
                             self.passmessagetogui(channelNM,wcommand,txtline,sender)
                     elif command == 'NICK':
@@ -260,13 +266,11 @@ class IRCConnection:
                         txtline = ''+params[params.find(self.nick)+len(self.nick)+1:]
                         self.passmessagetogui(channelNM,wcommand,txtline,sender)
 
-
             else: # this for commands that don't start with : example PING
                 # lets get that PING pois
                 if line.find('PING') == -1:
                     cha = self.get_channel(channelNM).add_line(IRCMessage(str('KESKEN 1'+server),'KESKEN',line))
                     # send so it to GUI
-                    #self.passmessagetogui(channelNM,wcommand,txtline,sender)
                     self.passmessagetogui(channelNM,wcommand,str(line),sender)
                 else:
                     cha = self.get_channel(channelNM).add_line(IRCMessage(str('KESKEN 1'+server),'KESKEN',line))
@@ -279,8 +283,14 @@ class IRCConnection:
             for channel in self.channels:
                 if name == channel.name:
                     return channel
+    def get_server(self,name):
+        for server in self.servers:
+            if server.name == name:
+                return server
+        return self.servers[0]
 
-    def message(self,mes,channel=''):
+    def message(self,mes,serverName,channel=''):
+        server = self.get_server(serverName)
         num = mes.find(' ') # find the first space
         if num == -1: # no space found
             comm = mes
@@ -293,12 +303,12 @@ class IRCConnection:
                 if msg == -1:
                     return 0
                 else:
-                    self.server.send( msg )
+                    server.socket.send( msg )
                     return 0
         # we parse it to channel
         if channel[:1] == '#' and len(channel)>1 and len(mes)>0:
             msg = 'PRIVMSG '+str(channel)+' :'+mes+'\r\n'
-            self.server.send( msg )
+            server.socket.send( msg )
 
 class Join:
     def __init__(self):

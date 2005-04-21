@@ -122,6 +122,7 @@ class CursesGui:
         self.typewin.refresh()        
 
     def draw_lines_to_message_win(self,channel):
+        # This is fucked up. Write better when time
         # first clear the window
         self.messagewin.clear()
         lines = channel.lines
@@ -130,20 +131,48 @@ class CursesGui:
         lines.reverse()
         # get the lines for lines
         splittedlines = list()
-        # remember to fix later so that it will not slit words
-        # it it is not necessery
+
         for line in lines:
-            pituus = len(line.sender)+3
-            pituus2 = mwx -1 - pituus
-            x = 0
+            # if the sender is nick (it has ! in it) cut the host for now
+            # REMEMBER TO FIX LATER
+            nik = line.sender.find('!')
+            if nik > 0:
+                nikki = line.sender[0:nik]
+            else:
+                nikki = line.sender
+
+            justwords = line.text.split(' ')
+            justwords2 = list()
+            pituus2 = (mwx -1 - (len(nikki)+3))
+            for word in justwords:
+                x = 0
+                if len(word) > pituus2:
+                    while len(word[x:len(word)]) > pituus2:
+                        justwords2.append(word[x:(x+pituus2)])
+                        x = x+pituus2
+                    justwords2.append(word[x:len(word)])
+                else:
+                    justwords2.append(word)
+
+            # now all the words should be nice length
+            sline = '<'+nikki+'> '
             templines = list()
-            while x < len(line.text):
-                sline = '<'+line.sender+'> ' +line.text[x:x+pituus2]
-                x = x + pituus2
-                templines.append(sline)
+            for word in justwords2:
+                if len(sline)+len(word) < mwx:
+                    if len(sline) == len(nikki)+3:
+                        sline = sline+''+word
+                    else:
+                        sline = sline+' '+word
+                else:
+                    templines.append(sline)
+                    sline = '<'+nikki+'> '+word
+            templines.append(sline)
+
             templines.reverse()
             splittedlines.extend(templines)
+
         numlines = len(splittedlines)
+
         # put the splitted lines to screen
         for line in splittedlines:
             if currentline < mwy:
@@ -156,7 +185,6 @@ class CursesGui:
                 break
         lines.reverse()
 
-            
     # here is the main function with the main loop etc.
     def start(self):
         self.irc.connect('ORJAnet','192.168.1.2',6667,'pzq2','asd2dasv','dyksi',self.update_window2)

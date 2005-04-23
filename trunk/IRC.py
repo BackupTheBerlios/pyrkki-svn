@@ -103,13 +103,6 @@ class IRC(Thread):
         self.messagequeue = Queue.Queue()
         self.servers = list()
 
-        self.commands = list()
-        self.commands.append(Join())
-        self.commands.append(Part())
-        self.commands.append(Msg())
-        self.commands.append(Nick())
-        self.commands.append(Names())
-
     def connect(self,name,serverIP, port, nick,user,username,messfunk):
         self.messagefunk = messfunk
         serv = IRCServer(name,serverIP,port,nick,user,username,self.messagequeue)
@@ -291,74 +284,41 @@ class IRC(Thread):
 
     def message(self,mes,serverName,channel=''):
         server = self.get_server(serverName)
-        num = mes.find(' ') # find the first space
-        if num == -1: # no space found
-            comm = mes
-        else:
-            comm = mes[:num] # first word
-        comm = comm.upper() # make the command uppercase
-        for command in self.commands:
-            if command.name == comm:
-                msg = command.execute(mes[len(command.name)+1:],channel)
-                if msg == -1:
+
+        if mes[0] == '/' and len(mes)>1: # this is a command
+            mes = mes[1:]
+            num = mes.find(' ') # find the first space
+            parameters = ''
+            if num == -1: # no space found
+                comm = mes.upper()
+            else:
+                comm = mes[:num] # first word
+                comm =  comm.upper()
+                parameters = mes[num+1:]
+            if channel == 'STATUS':
+                channel = ''
+            else:
+                channel = channel+' '
+            for comma in list(('TOPIC','PART')):
+                if comma == comm:
+                    parameters = ':'+parameters
+                    break
+
+            if comm == 'MSG':
+                num2 = parameters.find(' ')
+                if num2  == -1:
                     return 0
                 else:
+                    msg = 'PRIVMSG '+parameters[:num2]+' :'+parameters[num2+1:]+'\r\n'
                     server.socket.send( msg )
-                    return 0
+                    return
+
+            mes = comm+' '+channel+''+parameters+'\r\n'
+
+            server.socket.send(mes)
+            return 0
+
         # we parse it to channel
-        if channel[:1] == '#' and len(channel)>1 and len(mes)>0:
+        if channel[0] == '#' and len(channel)>1 and len(mes)>0:
             msg = 'PRIVMSG '+str(channel)+' :'+mes+'\r\n'
             server.socket.send( msg )
-
-class Join:
-    def __init__(self):
-        self.name = '/JOIN'
-        self.helptxt ="JOIN APUVA"
-    def execute(self,message,channel=''):
-        if message[:1] == '#' and len(message)>1:
-            return 'JOIN '+message+'\r\n'
-        else:
-            return -1
-
-class Part:
-    def __init__(self):
-        self.name = '/PART'
-        self.helptxt ="PART APUVA"
-    def execute(self,message,channel=''):
-        if channel[:1] == '#' and len(channel)>1:
-            return 'PART '+channel+'\r\n'
-        else:
-            return -1
-
-class Nick:
-    def __init__(self):
-        self.name = '/NICK'
-        self.helptxt = '/NICK your nickname'
-    def execute(self,message,channel=''):
-        if len(message)>1 and message[:1] != '#': # this should be corrected someday
-            return 'NICK '+message+'\r\n'
-        else:
-            return -1
-class Names:
-    def __init__(self):
-        self.name = '/NAMES'
-        self.helptxt = '/NAMES gives names visiable to user'
-    def execute(self,message,channel=''):
-        return 'NAMES '+channel+'\r\n' # this is not ready yet.
-
-class Msg:
-    def __init__(self):
-        self.name = '/MSG'
-        self.helptxt = 'Command used to send private messages'
-    def execute(self,message,channel=''):
-        if message[:1] != '#' or message[:1] != '!':
-            num = message.find(' ') # find the first space
-            if num == -1: # no space found
-                return -1
-            elif len(message[num+1:])>0:
-                nick = message[:num] # first word
-                return 'PRIVMSG '+nick+' :'+message[num+1:]+'\r\n'
-            else:
-                return -1
-        else:
-            return -1

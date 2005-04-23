@@ -208,7 +208,7 @@ class CursesGui:
                         inputstring = inputstring[:-1]
                         self.typewin.delch(0,len(inputstring)+1)
                     else:
-                        for chmark in list(' 1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZÅÄÖabcdefghijklmnopqrstuvwxyzåäö!"#¤%&/()=?¡@£$~¥{[]}\~<>,.-*^:;'):
+                        for chmark in list(' 1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZÅÄÖabcdefghijklmnopqrstuvwxyzåäö!"#¤%&/()=?+¡@£$~¥{[]}\~<>,.-*^:;'):
                             if inputchar == ord(chmark):
                                 inputstring += chmark
                                 self.typewin.addch(0,len(inputstring),ord(chmark))
@@ -242,8 +242,8 @@ class CursesGui:
 
             channel = self.mwindows[self.active_mwindow].name
 
-            if channel == 'STATUS':
-                channel = ''
+            #if channel == 'STATUS':
+            #    channel = ''
             self.irc.message(inputstring,self.mwindows[self.active_mwindow].server,channel)
 
             self.typewin.erase()

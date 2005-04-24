@@ -121,6 +121,13 @@ class CursesGui:
         self.statuswin2.refresh()
         self.typewin.refresh()        
 
+    def get_time(self,loctime):
+        # example
+        # strftime("%a, %d %b %Y %H:%M:%S", loctime)
+        # 'Sun, 24 Apr 2005 13:46:24'
+        return strftime("%H:%M",loctime)
+
+
     def draw_lines_to_message_win(self,channel):
         # This is fucked up. Write better when time
         # first clear the window
@@ -132,6 +139,8 @@ class CursesGui:
         # get the lines for lines
         splittedlines = list()
 
+        # check the length of the time prefix
+        prefixlength = (len(self.get_time(localtime())) +1) # +1 for one space
         for line in lines:
             # if the sender is nick (it has ! in it) cut the host for now
             # REMEMBER TO FIX LATER
@@ -141,9 +150,12 @@ class CursesGui:
             else:
                 nikki = line.sender
 
+            linetime = self.get_time(line.time)+' '
+
             justwords = line.text.split(' ')
             justwords2 = list()
-            pituus2 = (mwx -1 - (len(nikki)+3))
+            pituus2 = (mwx -1 - (len(nikki)+3)+prefixlength)
+
             for word in justwords:
                 x = 0
                 if len(word) > pituus2:
@@ -155,17 +167,17 @@ class CursesGui:
                     justwords2.append(word)
 
             # now all the words should be nice length
-            sline = '<'+nikki+'> '
+            sline = linetime+'<'+nikki+'> '
             templines = list()
             for word in justwords2:
                 if len(sline)+len(word) < mwx:
-                    if len(sline) == len(nikki)+3:
+                    if len(sline) == len(nikki)+3+prefixlength:
                         sline = sline+''+word
                     else:
                         sline = sline+' '+word
                 else:
                     templines.append(sline)
-                    sline = '<'+nikki+'> '+word
+                    sline = linetime+'<'+nikki+'> '+word
             templines.append(sline)
 
             templines.reverse()
@@ -257,5 +269,5 @@ class CursesGui:
     def putmessagetoscreen(self,inputstring):
         chan = self.mwindows[self.active_mwindow]
         nick = self.irc.get_server(chan.server).nick
-        chan.add_line(IRCMessage(str(nick),'itse',inputstring))
+        chan.add_line(IRCMessage(str(nick),'itse',inputstring,localtime()))
         self.update_window()

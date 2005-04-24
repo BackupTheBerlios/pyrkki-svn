@@ -26,13 +26,15 @@ import Queue
 import os
 import sys
 
+from time import localtime,strftime
 from threading import *
 
 class IRCMessage:
-    def __init__(self,sender,to,text):
+    def __init__(self,sender,to,text,time):
         self.sender = sender
         self.to = to
         self.text = text
+        self.time = time
 
 class QueueMessage:
     def __init__(self,lines,name):
@@ -127,10 +129,10 @@ class IRC(Thread):
     def passmessagetogui(self,channelNM,wcommand, txtline,sender):
         cha = self.get_channel(channelNM)
         if cha != None: 
-            self.get_channel(channelNM).add_line(IRCMessage(str(sender),str(channelNM),txtline))
+            self.get_channel(channelNM).add_line(IRCMessage(str(sender),str(channelNM),txtline,localtime()))
         else:
             cha = self.messages
-            cha.add_line(IRCMessage(str(sender),'PALVELIN',"TÄSTÄPUUTTUU LINE"))
+            cha.add_line(IRCMessage(str(sender),'PALVELIN',"TÄSTÄPUUTTUU LINE",localtime()))
         self.messagefunk(cha,'REMEBER TO FIX LATER',wcommand)
         
     def messageparser(self,lines,sserver):
@@ -262,11 +264,11 @@ class IRC(Thread):
             else: # this for commands that don't start with : example PING
                 # lets get that PING pois
                 if line.find('PING') == -1:
-                    cha = self.get_channel(channelNM).add_line(IRCMessage(str('KESKEN 1'+server),'KESKEN',line))
+                    cha = self.get_channel(channelNM).add_line(IRCMessage(str('KESKEN 1'+server),'KESKEN',line,localtime()))
                     # send so it to GUI
                     self.passmessagetogui(channelNM,wcommand,str(line),sender)
                 else:
-                    cha = self.get_channel(channelNM).add_line(IRCMessage(str('KESKEN 1'+server),'KESKEN',line))
+                    cha = self.get_channel(channelNM).add_line(IRCMessage(str('KESKEN 1'+server),'KESKEN',line,localtime()))
                     self.passmessagetogui(channelNM,wcommand,str(line),sender)
 
     def get_channel(self,name):

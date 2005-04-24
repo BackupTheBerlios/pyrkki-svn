@@ -29,6 +29,15 @@ import sys
 from time import localtime,strftime
 from threading import *
 
+class IRCUser:
+    def __init__(self,user,host,server,nick,status,realname):
+        self.user = user
+        self.host = host
+        self.server = server
+        self.nick = nick
+        self.status = status.strip('H') # removed the H
+        self.realname = realname
+        
 class IRCMessage:
     def __init__(self,sender,to,text,time):
         self.sender = sender
@@ -52,7 +61,6 @@ class IRCServer(Thread):
         self.username = username
         self.messagequeue = messagequeue
         self.socket = socket.socket ( socket.AF_INET, socket.SOCK_STREAM )
-
     def run(self):
         while True:
             data = self.socket.recv ( 4096 )
@@ -75,8 +83,17 @@ class IRCChannel:
         self.mode = mode
         self.maxlines = 100
         self.server = _server
-        self.namesopen = 0
+        self.usersopen = 0
 
+    def add_user(self,user):
+        if self.usersopen == 0:
+            self.users = list() # clear users
+            self.usersopen = 1 # wait for more users
+        try:
+            self.users.index(user)
+        except:
+            self.users.append(user)
+    
     def add_users(self,users):
         if self.namesopen == 0:
             self.users = list() # clear the list
@@ -104,6 +121,7 @@ class IRC(Thread):
         self.messages = IRCChannel("STATUS","no","STATUS") # status channel
         self.messagequeue = Queue.Queue()
         self.servers = list()
+        self.userwho = 1 # if user is doing who command
 
     def connect(self,name,serverIP, port, nick,user,username,messfunk):
         self.messagefunk = messfunk
@@ -126,7 +144,7 @@ class IRC(Thread):
             server = self.get_server(x.name)
             self.messageparser(x.lines,server)
 
-    def passmessagetogui(self,channelNM,wcommand, txtline,sender):
+    def passmessagetochannel(self,channelNM,wcommand, txtline,sender):
         cha = self.get_channel(channelNM)
         if cha != None: 
             self.get_channel(channelNM).add_line(IRCMessage(str(sender),str(channelNM),txtline,localtime()))
@@ -200,6 +218,7 @@ class IRC(Thread):
 
                 channelNM = channelname # this could mean trouble later
 
+
                 # lets handle some commands
                 if len(command)>3: # Text command
                     txtline = ''
@@ -216,67 +235,84 @@ class IRC(Thread):
                             wcommand = 'NEWWINDOW'
                         txtline = '<'+str(om)+'>'+nick+' joined '+channelNM
                         # ask /names from channel to update channel.users
-                        self.message('/NAMES',sserver,channelNM)
-                        self.passmessagetogui(channelNM,wcommand,txtline,sender)
+                        self.message('/who',sserver,channelNM)
+                        self.userwho = 0
+                        self.passmessagetochannel(channelNM,wcommand,txtline,sender)
                     elif command == 'PART':
                         if om == 1:
                             wcommand = 'REMOVEWINDOW'
                             # pass information to GUI
-                            self.passmessagetogui(channelNM,wcommand,"PARTED",sender)
+                            self.passmessagetochannel(channelNM,wcommand,"PARTED",sender)
                             self.channels.remove(self.get_channel(channelNM))
                         else:
                             txtline = ''+nick+' parted '+channelNM
                             # ask /names from channel to update channel.users
-                            self.message('/NAMES',sserver,channelNM)
+                            self.message('/who',sserver,channelNM)
+                            self.userwho = 0
                             # pass information to GUI
-                            self.passmessagetogui(channelNM,wcommand,txtline,sender)
+                            self.passmessagetochannel(channelNM,wcommand,txtline,sender)
                     elif command == 'NICK':
                         newnick = params[params.find(':')+1:]
                         if om == 1:
                             self.nick = newnick
                         txtline = ''+nick+' is now know as '+newnick
-                        self.passmessagetogui(channelNM,wcommand,txtline,sender)
+                        self.passmessagetochannel(channelNM,wcommand,txtline,sender)
                     elif command == 'PRIVMSG':
                         res = myre.search(params)
                         if res is not None:
                             txtline = params[res.end()+2:]
                         else:
                             txtline = params
-                        self.passmessagetogui(channelNM,wcommand,txtline,sender)
+                        self.passmessagetochannel(channelNM,wcommand,txtline,sender)
                     else: # so its not one of those upper commands and not a number
                         txtline = ''+command+' '+params
-                        self.passmessagetogui(channelNM,wcommand,txtline,sender)
+                        self.passmessagetochannel(channelNM,wcommand,txtline,sender)
                 else: # number command
-                    if int(command) == 353: # channel names is coming here
-                        nickstemp = params[params.find(':')+1:]
-                        nicks = nickstemp.split(' ')
-                        nicks = nicks[0:-1]
-                        self.get_channel(channelNM).add_users(nicks)
-                        self.passmessagetogui(channelNM,'NAMES','',sender)
-                        # no names txt to GUI
-                    elif int(command) == 366: # end of names list
-                        self.get_channel(channelNM).namesopen=0
-                        self.passmessagetogui(channelNM,'NAMES','',sender)
+                    if int(command) == 352: # who reply
+                        wp = params.split(' ')
+                        self.get_channel(channelNM).add_user(IRCUser(wp[2],wp[3],wp[4],wp[5],wp[6],wp[8]))
+                        if self.userwho == 1: # 
+                            self.passmessagetochannel(channelNM,wcommand,params,sender)
+                    elif int(command) == 315: # end of who
+                        self.get_channel(channelNM).usersopen=0
+                        if self.userwho == 0: #
+                            self.userwho = 1
+                            self.messagefunk(self.get_channel(channelNM),'REMEBER TO FIX LATER',wcommand) # just to update win
+                        else:
+                            self.passmessagetochannel(channelNM,wcommand,params,sender)
+
+                        
+                    #elif int(command) == 353: # channel names is coming here
+                    #    nickstemp = params[params.find(':')+1:]
+                    #    nicks = nickstemp.split(' ')
+                    #    nicks = nicks[0:-1]
+                    #    self.get_channel(channelNM).add_users(nicks)
+                    #    self.passmessagetochannel(channelNM,'NAMES','',sender)
+                    #    # no names txt to GUI
+                    #elif int(command) == 366: # end of names list
+                    #    self.get_channel(channelNM).namesopen=0
+                    #    self.passmessagetochannel(channelNM,'NAMES','',sender)
                     else:
                         txtline = ''+params[params.find(self.nick)+len(self.nick)+1:]
-                        self.passmessagetogui(channelNM,wcommand,txtline,sender)
+                        self.passmessagetochannel(channelNM,wcommand,txtline,sender)
 
             else: # this for commands that don't start with : example PING
                 # lets get that PING pois
                 if line.find('PING') == -1:
                     cha = self.get_channel(channelNM).add_line(IRCMessage(str('KESKEN 1'+server),'KESKEN',line,localtime()))
                     # send so it to GUI
-                    self.passmessagetogui(channelNM,wcommand,str(line),sender)
+                    self.passmessagetochannel(channelNM,wcommand,str(line),sender)
                 else:
                     cha = self.get_channel(channelNM).add_line(IRCMessage(str('KESKEN 1'+server),'KESKEN',line,localtime()))
-                    self.passmessagetogui(channelNM,wcommand,str(line),sender)
+                    self.passmessagetochannel(channelNM,wcommand,str(line),sender)
 
     def get_channel(self,name):
+        name = name.upper()
         if name == 'STATUS':
             return self.messages
         else:
             for channel in self.channels:
-                if name == channel.name:
+                if name == channel.name.upper():
                     return channel
     def get_server(self,name):
         for server in self.servers:
@@ -285,6 +321,8 @@ class IRC(Thread):
         return self.servers[0]
 
     def message(self,mes,serverName,channel=''):
+        if len(mes)<1:
+            return 
         server = self.get_server(serverName)
 
         if mes[0] == '/' and len(mes)>1: # this is a command

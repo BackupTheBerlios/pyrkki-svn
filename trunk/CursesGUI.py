@@ -53,11 +53,11 @@ class CursesGui:
         self.typewin.keypad(1)
 
         # message win
-        self.messagewin = curses.newwin(y-2,x-10,0,0) # nick lengt is 9 char should be done dynamically
+        self.messagewin = curses.newwin(y-2,x-13,0,0) # nick lengt is 9 char should be done dynamically
         # so that windows size should depend on nick lenghts
 
         # nick win
-        self.nickwin = curses.newwin(y-2,10,0,x-10) # should also be dynamic
+        self.nickwin = curses.newwin(y-2,13,0,x-13) # should also be dynamic
         
         # list of our window (channel)
         self.mwindows = list()
@@ -81,7 +81,7 @@ class CursesGui:
         x = 0
         maxy,maxx = self.scr.getmaxyx()
         for user in chan.users:
-            self.nickwin.addstr(x,0,user)
+            self.nickwin.addstr(x,0,user.status+user.nick)
             x = x + 1
             if x+3 > maxy: # break if too many nicks to fit window
                 break
@@ -204,7 +204,7 @@ class CursesGui:
 
         currentserver = 0
         self.mwindows.append(self.irc.messages)
-        # self.irc.connect('EFnet','someserverhere',6667,'pzq2','asd2dasv','dyksi',self.update_window2)
+        #self.irc.connect('EFnet','someseerver',6667,'pzq2','asd2dasv','dyksi',self.update_window2)
         pirssion = 1
         # lets take some key input this just a quick method. Remember to fix later
         while pirssion == 1:

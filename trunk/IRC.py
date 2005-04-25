@@ -62,18 +62,21 @@ class IRCServer(Thread):
         self.messagequeue = messagequeue
         self.socket = socket.socket ( socket.AF_INET, socket.SOCK_STREAM )
     def run(self):
+        temp = ''
         while True:
-            data = self.socket.recv ( 4096 )
-            # raw lines splitted with irc protocols line end mark
-            # problem is that it leaves one empty line so we have
-            # to send all but last lines to messagefunk
-            lines = data.split('\r\n')
-            self.messagequeue.put(QueueMessage(lines[0:-1],self.name))
+            data = temp+self.socket.recv(4096)
+            nu = data.rfind('\n')
+            if nu != len(data):
+                temp = data[nu+1:]
+                data = data[:nu]
+            else:
+                temp = ''
+            lines = data.splitlines()
+            self.messagequeue.put(QueueMessage(lines,self.name))
 
             # return to ping with pong
             if data.find ( 'PING' ) != -1:
                 self.socket.send ( 'PONG ' + data.split() [ 1 ] + '\r\n' )
-
 
 class IRCChannel:
     def __init__(self,name,mode,_server):
@@ -153,9 +156,9 @@ class IRC(Thread):
             cha.add_line(IRCMessage(str(sender),'PALVELIN',"TÄSTÄPUUTTUU LINE",localtime()))
         self.messagefunk(cha,'REMEBER TO FIX LATER',wcommand)
         
+
     def messageparser(self,lines,sserver):
         myre = re.compile('#[\S]+')
-        myre2 = re.compile('\s[\S]+\s')
         channelNM = "STATUS" # default channel
         wcommand = "NONE"
 
@@ -199,14 +202,14 @@ class IRC(Thread):
                     nick = sender[:sender.find('!')]
                 else:
                     server = sender
-                    
-                res2 = myre2.search(line) # catch the command
-                command = line[res2.start()+1:res2.end()-1]
+
+                catline = line[line.find(' ')+1:] # firstspace
+                command = catline[:catline.find(' ')]
 
                 if len(command) == 3: # it number command
                     command_number = int(command)
                     
-                params = line[res2.end():]
+                params = catline[catline.find(' ')+1:]
 
                 # lets see if this is going to some channel
                 res = myre.search(params)
@@ -217,7 +220,6 @@ class IRC(Thread):
                     channelname = 'STATUS'
 
                 channelNM = channelname # this could mean trouble later
-
 
                 # lets handle some commands
                 if len(command)>3: # Text command
@@ -257,6 +259,15 @@ class IRC(Thread):
                             self.nick = newnick
                         txtline = ''+nick+' is now know as '+newnick
                         self.passmessagetochannel(channelNM,wcommand,txtline,sender)
+                    elif command == 'QUIT':
+                        for chn in self.channels:
+                            if chn.server == sserver.name:
+                                for user in chn.users:
+                                    if user.nick == nick:
+                                        self.passmessagetochannel(chn.name,wcommand,params,sender)
+                                        chn.users.remove(user)
+                        self.messagefunk(self.get_channel(channelNM),'REMEBER TO FIX LATER',wcommand) # just to update win
+
                     elif command == 'PRIVMSG':
                         res = myre.search(params)
                         if res is not None:
@@ -280,18 +291,6 @@ class IRC(Thread):
                             self.messagefunk(self.get_channel(channelNM),'REMEBER TO FIX LATER',wcommand) # just to update win
                         else:
                             self.passmessagetochannel(channelNM,wcommand,params,sender)
-
-                        
-                    #elif int(command) == 353: # channel names is coming here
-                    #    nickstemp = params[params.find(':')+1:]
-                    #    nicks = nickstemp.split(' ')
-                    #    nicks = nicks[0:-1]
-                    #    self.get_channel(channelNM).add_users(nicks)
-                    #    self.passmessagetochannel(channelNM,'NAMES','',sender)
-                    #    # no names txt to GUI
-                    #elif int(command) == 366: # end of names list
-                    #    self.get_channel(channelNM).namesopen=0
-                    #    self.passmessagetochannel(channelNM,'NAMES','',sender)
                     else:
                         txtline = ''+params[params.find(self.nick)+len(self.nick)+1:]
                         self.passmessagetochannel(channelNM,wcommand,txtline,sender)

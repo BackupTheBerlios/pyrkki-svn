@@ -29,7 +29,7 @@ from IRC import *
 class CursesGui:
     def __init__(self):
 
-        # number if active connection
+        # our irc-object
         self.irc = IRC(self.update_window2)
         
         # init the screen
@@ -127,7 +127,6 @@ class CursesGui:
         # 'Sun, 24 Apr 2005 13:46:24'
         return strftime("%H:%M",loctime)
 
-
     def draw_lines_to_message_win(self,channel):
         # This is fucked up. Write better when time
         # first clear the window
@@ -154,7 +153,7 @@ class CursesGui:
 
             justwords = line.text.split(' ')
             justwords2 = list()
-            pituus2 = (mwx -1 - (len(nikki)+3)+prefixlength)
+            pituus2 = (mwx -1 - (len(nikki)+3+prefixlength)) # carefull with the parenthesis
 
             for word in justwords:
                 x = 0
@@ -249,15 +248,9 @@ class CursesGui:
 
             #put our message to channel or status screen
             self.putmessagetoscreen(inputstring)
-            
             self.update_window()
-
             channel = self.mwindows[self.active_mwindow].name
-
-            #if channel == 'STATUS':
-            #    channel = ''
             self.irc.message(inputstring,self.mwindows[self.active_mwindow].server,channel)
-
             self.typewin.erase()
             
 

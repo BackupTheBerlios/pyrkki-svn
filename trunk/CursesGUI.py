@@ -30,7 +30,7 @@ class CursesGui:
     def __init__(self):
 
         # number if active connection
-        self.irc = IRC()
+        self.irc = IRC(self.update_window2)
         
         # init the screen
         self.scr = curses.initscr()
@@ -199,7 +199,7 @@ class CursesGui:
 
     # here is the main function with the main loop etc.
     def start(self):
-        self.irc.connect('ORJAnet','192.168.1.2',6667,'pzq2','asd2dasv','dyksi',self.update_window2)
+        self.irc.connect('ORJAnet','192.168.1.2',6667,'petteri','asd2dasv','dyksi')
         self.irc.start()
 
         currentserver = 0
@@ -268,6 +268,10 @@ class CursesGui:
 
     def putmessagetoscreen(self,inputstring):
         chan = self.mwindows[self.active_mwindow]
-        nick = self.irc.get_server(chan.server).nick
+        # dirty hack FIX LATER
+        try:
+            nick = self.irc.get_server(chan.server).nick
+        except:
+            nick = 'pyRKKI ERROR: NOT CONNECTED'
         chan.add_line(IRCMessage(str(nick),'itse',inputstring,localtime()))
         self.update_window()

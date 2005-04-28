@@ -291,8 +291,17 @@ class IRC(Thread):
                         newnick = params[params.find(':')+1:]
                         if om == 1:
                             sserver.nick = newnick
-                        txtline = ''+nick+' is now know as '+newnick
-                        self.passmessagetochannel(channelNM,wcommand,txtline,sender)
+                        for chn in self.channels:
+                            if chn.server == sserver.name:
+                                for user in chn.users:
+                                    if user.nick == nick:
+                                        chn.users.remove(user)
+                                        # ask /who from channel to update channel.users
+                                        self.message('/who',sserver,chn.name)
+                                        self.userwho = 0
+                                        txtline = ''+nick+' is now know as '+newnick
+                                        self.passmessagetochannel(chn.name,wcommand,txtline,sender)
+
                     elif command == 'QUIT':
                         for chn in self.channels:
                             if chn.server == sserver.name:
@@ -303,11 +312,23 @@ class IRC(Thread):
                         self.messagefunk(self.get_channel(channelNM),'REMEBER TO FIX LATER',wcommand) # just to update win
                     elif command == 'PRIVMSG':
                         res = myre.search(params)
-                        if res is not None:
+                        if res is not None: # is channel
                             txtline = params[res.end()+2:]
-                        else:
-                            txtline = params
-                        self.passmessagetochannel(channelNM,wcommand,txtline,sender)
+                            self.passmessagetochannel(channelNM,wcommand,txtline,sender)
+                        else: # is privmessage
+                            # first we should see if we have allready a channel for this nick
+                            #prnick =  params[:params.find(' ')]
+                            chexists = 0
+                            for chn in self.channels:
+                                if (chn.name == nick) and (chn.server == sserver.name):
+                                    chexists = 1
+                                    break
+                            if chexists == 0:
+                                self.channels.append(IRCChannel(nick,"asd",self.name))
+                                wcommand = 'NEWWINDOW'
+                            txtline = params[params.find(' ')+2:]
+                            self.passmessagetochannel(nick,wcommand,txtline,sender)
+
                     else: # so its not one of those upper commands and not a number
                         txtline = ''+command+' '+params
                         self.passmessagetochannel(channelNM,wcommand,txtline,sender)
@@ -416,9 +437,22 @@ class IRC(Thread):
                 if num2  == -1:
                     return 0
                 else:
-                    msg = 'PRIVMSG '+parameters[:num2]+' :'+parameters[num2+1:]+'\r\n'
+                    nick = parameters[:num2]
+                    privmes = parameters[num2+1:]
+                    msg = 'PRIVMSG '+nick+' :'+privmes+'\r\n'
                     server.send( msg )
+                    # create new window and channel for our new chat companinon if we dont yet have one
+                    chexists = 0
+                    for chn in self.channels:
+                        if (chn.name == nick) and (chn.server == sserver.name):
+                            chexists = 1
+                            break
+                    if chexists == 0:
+                        self.channels.append(IRCChannel(nick,"asd",server.name))
+                    self.passmessagetochannel(nick,'NEWWINDOW',privmes,server.nick)
                     return
+            if comm == 'JOIN':
+                channel = ''
             if comm == 'NICK':
                 channel=''
                 server.nick = parameters
@@ -428,7 +462,8 @@ class IRC(Thread):
             server.send(mes)
             return 0
 
-        # we parse it to channel
-        if channel[0] == '#' and len(channel)>1 and len(mes)>0:
+        # we parse it to channel or to nick
+        # if channel[0] == '#' and len(channel)>1 and len(mes)>0:
+        if channel != 'STATUS' and len(mes)>0:
             msg = 'PRIVMSG '+str(channel)+' :'+mes+'\r\n'
             server.send( msg )

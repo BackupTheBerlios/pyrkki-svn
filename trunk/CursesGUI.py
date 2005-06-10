@@ -196,6 +196,27 @@ class CursesGui:
                 break
         lines.reverse()
 
+    def start2(self):
+        self.irc.connect('ORJAnet','192.168.1.2',6667,'petteri','asd2dasv','dyksi')
+        self.irc.start()
+
+        currentserver = 0
+        self.mwindows.append(self.irc.messages)
+        #self.irc.connect('EFnet','someseerver',6667,'pzq2','asd2dasv','dyksi',self.update_window2)
+        pirssion = 1
+        # lets take some key input this just a quick method. Remember to fix later
+        tpad = curses.textpad.Textbox(self.typewin)
+        
+        while pirssion == 1:
+            self.typewin.refresh()
+            st = tpad.gather()
+            tpad.edit()
+
+        curses.nocbreak()
+        stdscr.keypad(0)
+        curses.echo()
+        curses.endwin()
+    
     # here is the main function with the main loop etc.
     def start(self):
         self.irc.connect('ORJAnet','192.168.1.2',6667,'petteri','asd2dasv','dyksi')

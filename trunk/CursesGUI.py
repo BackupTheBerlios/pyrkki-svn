@@ -20,11 +20,14 @@
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 
-import curses
 import os
 import sys
+import curses
+import curses.ascii
 
 from IRC import *
+
+from EditBuffer import *
 
 class CursesGui:
     def __init__(self):
@@ -86,6 +89,38 @@ class CursesGui:
             if x+3 > maxy: # break if too many nicks to fit window
                 break
         self.nickwin.refresh()
+        
+    def resizewindows(self,numlines=0):
+        if numlines < 1:
+            numlines = 0
+
+        # numlines is according to typewin
+
+        # init the first window as status window
+        y,x = self.scr.getmaxyx()
+
+        self.statuswin = curses.newwin(1,x,(y-(2+numlines)),0)
+        #self.statuswin.addstr(0,0,"[NOT CONNECTED]")
+
+        # staus win 2 who@where
+        statuswin2W = 10
+        self.statuswin2 = curses.newwin((1+numlines),statuswin2W,(y-(1+numlines)),0)
+        self.statuswin2.addstr(0,0,"NICK")
+
+        # type win
+        self.typewin = curses.newwin((1+numlines),x-statuswin2W-1,(y-(1+numlines)),statuswin2W-1)
+        self.typewin.keypad(1)
+
+        # message win
+        self.messagewin = curses.newwin((y-(2+numlines)),x-13,0,0) # nick lengt is 9 char should be done dynamically
+        # so that windows size should depend on nick lenghts
+
+        # nick win
+        self.nickwin = curses.newwin((y-(2+numlines)),13,0,x-13) # should also be dynamic
+        
+        # refresh the windows
+        self.update_window()
+
         
     # draw the window again
     def update_window(self):
@@ -196,28 +231,7 @@ class CursesGui:
                 break
         lines.reverse()
 
-    def start2(self):
-        self.irc.connect('ORJAnet','192.168.1.2',6667,'petteri','asd2dasv','dyksi')
-        self.irc.start()
 
-        currentserver = 0
-        self.mwindows.append(self.irc.messages)
-        #self.irc.connect('EFnet','someseerver',6667,'pzq2','asd2dasv','dyksi',self.update_window2)
-        pirssion = 1
-        # lets take some key input this just a quick method. Remember to fix later
-        tpad = curses.textpad.Textbox(self.typewin)
-        
-        while pirssion == 1:
-            self.typewin.refresh()
-            st = tpad.gather()
-            tpad.edit()
-
-        curses.nocbreak()
-        stdscr.keypad(0)
-        curses.echo()
-        curses.endwin()
-    
-    # here is the main function with the main loop etc.
     def start(self):
         self.irc.connect('ORJAnet','192.168.1.2',6667,'petteri','asd2dasv','dyksi')
         self.irc.start()
@@ -228,50 +242,44 @@ class CursesGui:
         pirssion = 1
         # lets take some key input this just a quick method. Remember to fix later
         while pirssion == 1:
-            inputstring = ''
+            textbuffer = EditBuffer()
             enterpushed = 0
+            oldlen = 0
+
             while enterpushed == 0:
-                self.typewin.refresh()
-                inputchar = self.typewin.getch(0,len(inputstring)+1)
-                if inputchar < 255:
-                    if inputchar == 10: # enter
+                ty,tx = self.typewin.getmaxyx()
+                ch = self.typewin.getch(textbuffer.y,textbuffer.x)
+                #lines = textbuffer.input(self.typewin.getch(textbuffer.x,textbuffer.y+1),ty,tx)
+                if ch > 0:
+                    if ch == 10: # enter
                         enterpushed = 1
-                    elif inputchar == 127:
-                        inputstring = inputstring[:-1]
-                        self.typewin.delch(0,len(inputstring)+1)
-                    else:
-                        for chmark in list(' 1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZÅÄÖabcdefghijklmnopqrstuvwxyzåäö!"#¤%&/()=?+¡@£$~¥{[]}\~<>,.-*^:;'):
-                            if inputchar == ord(chmark):
-                                inputstring += chmark
-                                self.typewin.addch(0,len(inputstring),ord(chmark))
-                                break
-                elif inputchar == 263: # backspace
-                    inputstring = inputstring[:-1]
-                    self.typewin.delch(0,len(inputstring)+1)
-                elif inputchar == 260:
-                    if self.active_mwindow > 0:
-                        self.active_mwindow = self.active_mwindow -1
-                        self.update_window()
-                    else: # change active connection
-                        if len(self.irc.servers) > currentserver+1:
-                            currentserver = currentserver + 1
-                            self.irc.messages.server = self.irc.servers[currentserver].name
-                        else:
-                            currentserver = 0
-                            self.irc.messages.server = self.irc.servers[currentserver].name
+                    lines = textbuffer.input(ch,ty,tx)
+                    
+                    
+                    # update the typewindow
+                    self.typewin.clear()
+                    
+                    if len(lines) != oldlen:
+                        self.resizewindows(len(lines)-1)
+                        oldlen = len(lines)
                         
-                elif inputchar == 261:
-                    if len(self.mwindows)-1 > self.active_mwindow:
-                        self.active_mwindow = self.active_mwindow +1
-                        self.update_window()
+                    linecounter = 0
+                    wholestring = ''
+                    for line in lines:
+                        self.typewin.addstr(linecounter,1,line)
+                        wholestring = wholestring + line
+                        linecounter = linecounter +1
+
                 
-                self.typewin.refresh()
+                    self.typewin.refresh()
+            # enter has been pushed, back to normal window sizes
+            self.resizewindows(0)
 
             #put our message to channel or status screen
-            self.putmessagetoscreen(inputstring)
+            self.putmessagetoscreen(wholestring)
             self.update_window()
             channel = self.mwindows[self.active_mwindow].name
-            self.irc.message(inputstring,self.mwindows[self.active_mwindow].server,channel)
+            self.irc.message(wholestring,self.mwindows[self.active_mwindow].server,channel)
             self.typewin.erase()
             
 
@@ -289,3 +297,146 @@ class CursesGui:
             nick = 'pyRKKI ERROR: NOT CONNECTED'
         chan.add_line(IRCMessage(str(nick),'itse',inputstring,localtime()))
         self.update_window()
+
+class EditBuffer:
+    def __init__(self):
+        self.lines = list()
+        self.lines.append('') # first line
+        self.pointer = 0
+        self.x = 1
+        self.y = 0
+        self.cursormove = 0 # not move cursor
+
+    def add_char(self, ch):
+        li = self.lines[self.y]
+        self.lines[self.y] = li[:self.x-1]+ch+li[self.x-1:]
+
+    def del_char(self):
+        if self.x < 2 and self.y > 0:
+            self.lines[self.y-1] = self.lines[self.y-1][:-1]
+        else:
+            li = self.lines[self.y]
+            self.lines[self.y] = li[:self.x-2]+li[self.x-1:]
+    
+    def input(self, ch, winY, winX):
+        self.maxx = winX
+        self.maxyy = winY
+        self.cursormove = 0
+
+        if ch == curses.KEY_LEFT:
+            if self.x > 1:
+                self.x = self.x -1
+        elif ch == curses.KEY_RIGHT:
+            if self.x < len(self.lines[self.y])+1:
+                self.cursormove = 1
+        elif ch == curses.KEY_UP:
+            if self.y > 0 and len(self.lines[self.y-1])+2 > self.x:
+                self.y = self.y-1
+        elif ch == curses.KEY_DOWN:
+            if self.y < len(self.lines)-1 and len(self.lines[self.y+1])+2 > self.x:
+                self.y = self.y+1
+        elif ch == curses.ascii.SOH: # ctrl-a
+            self.cursormove = 2 # begin of the line
+        elif ch == curses.ascii.ENQ: # ctrl-e
+            self.cursormove = 5 # end of the line
+        elif ch == curses.ascii.VT: # ctrl-k
+            if len(self.lines) > 1:
+                if self.y == len(self.lines)-1:
+                    del self.lines[self.y]
+                    self.y = self.y -1
+                else:
+                    del self.lines[self.y]
+                self.x = len(self.lines[self.y])+1
+            else:
+                del self.lines
+                self.lines = list()
+                self.x=1
+                self.y=0
+        elif ch in (curses.ascii.BS, curses.KEY_BACKSPACE, 127): # backspace
+            if self.x > 1:
+                self.del_char()
+            self.cursormove = 3 # one back
+        else:
+            totalcount = 0
+            for line in self.lines:
+                totalcount = totalcount + len(line)
+            if totalcount < 500:
+                for chmark in list(' 1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZÅÄÖabcdefghijklmnopqrstuvwxyzåäö!"#¤%&/()=?+¡@£$~¥{[]}\~<>,.-*^:;'):
+                    if ch == ord(chmark):
+                        self.add_char(chmark)
+                        self.cursormove = 1 # one forward
+        newlines = list()
+        wholestring = ''
+        newstring = ''
+        for line in self.lines:
+            wholestring = wholestring + line
+
+        splitted = wholestring.split(' ')
+
+        if len(splitted) == 1: #only one word
+            while len(wholestring) > 0: # we still have character left
+                newlines.append(wholestring[:self.maxx-2]) # add line
+                wholestring = wholestring[self.maxx-2:] # the end of the line for next line
+        else: # more than one word
+            newlines.append('')
+            newstring = ''
+            wordcount = 0
+            while wordcount < len(splitted):
+                word = splitted[wordcount]
+                
+                if wordcount < (len(splitted) -1): # is not the last
+                    word = word+' ' # add the space
+                temp = newlines[len(newlines)-1]
+                
+                if len(temp+word) < self.maxx-2:
+                    newlines[len(newlines)-1] = temp + word
+                else:
+                    if len(word) < self.maxx-2:
+                        newlines.append(word)
+                        # for jumpingo
+                        if self.x == self.maxx-2 and self.cursormove == 1:
+                            self.cursormove = 4 # jump
+                    else:
+                        while len(word) > 0:
+                            newlines.append(word[:self.maxx-2])
+                            word = word[self.maxx-2:]
+                wordcount = wordcount +1
+
+        if len(newlines) == 0:
+            newlines.append('')
+        
+        self.lines = newlines
+
+        if self.cursormove == 1: # one forward
+            if self.x > len(self.lines[self.y]):
+                self.y = self.y +1
+                self.x = 2
+            else:
+                self.x = self.x +1
+        elif self.cursormove == 2: # ctrl-a
+            self.x = 1
+        elif self.cursormove == 3: # one back
+            if self.x > 1 and self.y == 0:
+                self.x = self.x -1
+            if self.y > len(self.lines) -1:
+                self.y = self.y -1
+                self.x = len(self.lines[self.y])+1
+            elif self.x > 2 and self.y > 0:
+                self.x = self.x -1
+            elif self.y > 0:
+                self.y = (self.y -1)
+                self.x = len(self.lines[self.y])+1
+
+        elif self.cursormove == 4: # jump
+            if self.x > len(self.lines[self.y]):
+                self.y = self.y +1
+                fspace = self.lines[self.y].find(' ')
+                if fspace != -1:
+                    self.x = fspace
+                else:
+                    self.x = len(self.lines[self.y])+1
+        elif self.cursormove == 5: # end of the line
+            self.x = len(self.lines[self.y])+1
+
+            
+        return self.lines

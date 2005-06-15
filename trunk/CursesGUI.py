@@ -27,8 +27,6 @@ import curses.ascii
 
 from IRC import *
 
-from EditBuffer import *
-
 class CursesGui:
     def __init__(self):
 
@@ -76,7 +74,12 @@ class CursesGui:
         # update the status bar
         self.statuswin.clear()
         chan = self.mwindows[self.active_mwindow]
-        self.statuswin.addstr(0,0,'['+chan.server+'] '+chan.name+' '+str(self.mwindows.index(chan)))
+        channelsupdated = ''
+        for channel in self.mwindows:
+            if channel.updated == 1:
+                channelsupdated += " ["+str(self.mwindows.index(channel))+"]"
+            
+        self.statuswin.addstr(0,0,'['+chan.server+'] '+chan.name+' '+str(self.mwindows.index(chan))+' '+channelsupdated)
 
     def update_nickwin(self):
         self.nickwin.clear()
@@ -125,6 +128,7 @@ class CursesGui:
     # draw the window again
     def update_window(self):
         channel = self.mwindows[self.active_mwindow]
+
         self.draw_lines_to_message_win(channel)
         self.update_status()
         self.update_nickwin()
@@ -148,6 +152,11 @@ class CursesGui:
             for chanwin in self.mwindows:
                 if chanwin.name == channel.name:
                     self.draw_lines_to_message_win(channel)
+        else: # mark channel updated
+            for chanwin in self.mwindows:
+                if chanwin.name == channel.name:
+                    channel.updated = 1
+            
         self.update_status()
         self.update_nickwin()
         # refresh the windows
@@ -162,11 +171,14 @@ class CursesGui:
         # 'Sun, 24 Apr 2005 13:46:24'
         return strftime("%H:%M",loctime)
 
-    def draw_lines_to_message_win(self,channel):
+    def draw_lines_to_message_win(self,channel, uplines=0):
+        # mark that we have seen the channel
+        channel.updated = 0
+        
         # This is fucked up. Write better when time
         # first clear the window
         self.messagewin.clear()
-        lines = channel.lines
+        lines = channel.lines[:(len(channel.lines)-channel.linecount)]
         mwy,mwx = self.messagewin.getmaxyx()
         currentline = 0
         lines.reverse()
@@ -245,33 +257,51 @@ class CursesGui:
             textbuffer = EditBuffer()
             enterpushed = 0
             oldlen = 0
+            gotalt = 0 # for alt characters
 
             while enterpushed == 0:
+                isinlist = 0
                 ty,tx = self.typewin.getmaxyx()
                 ch = self.typewin.getch(textbuffer.y,textbuffer.x)
-                #lines = textbuffer.input(self.typewin.getch(textbuffer.x,textbuffer.y+1),ty,tx)
                 if ch > 0:
                     if ch == 10: # enter
                         enterpushed = 1
-                    lines = textbuffer.input(ch,ty,tx)
-                    
-                    
-                    # update the typewindow
-                    self.typewin.clear()
-                    
-                    if len(lines) != oldlen:
-                        self.resizewindows(len(lines)-1)
-                        oldlen = len(lines)
-                        
-                    linecounter = 0
-                    wholestring = ''
-                    for line in lines:
-                        self.typewin.addstr(linecounter,1,line)
-                        wholestring = wholestring + line
-                        linecounter = linecounter +1
-
-                
-                    self.typewin.refresh()
+                    elif ch in(curses.KEY_PPAGE,curses.ascii.STX): # page up also ctrl-b
+                        self.mwindows[self.active_mwindow].page_up()
+                        self.update_window()
+                        ch = 0
+                    elif ch in(curses.KEY_NPAGE,curses.ascii.EOT): # page down also ctrl-d
+                        self.mwindows[self.active_mwindow].page_down()
+                        self.update_window()
+                        ch = 0
+                    else:
+                        name = curses.keyname(ch)
+                        if gotalt == 1:
+                            for altchar in list('123456789'): #change the window
+                                if ch == ord(altchar):
+                                    isinlist = 1
+                                    window_number = int(altchar) -1
+                                    if len(self.mwindows) > window_number:
+                                        self.active_mwindow = window_number
+                                        self.update_window()
+                                    ch = 0 # delete the character
+                            gotalt = 0
+                        if name.startswith("M-") or name.startswith("m-") or name.startswith("^["): # get alt/meta
+                            gotalt = 1
+                        if ch > 0:
+                            lines = textbuffer.input(ch,ty,tx)
+                            # update the typewindow
+                            self.typewin.clear()
+                            if len(lines) != oldlen:
+                                self.resizewindows(len(lines)-1)
+                                oldlen = len(lines)
+                            linecounter = 0
+                            wholestring = ''
+                            for line in lines:
+                                self.typewin.addstr(linecounter,1,line)
+                                wholestring = wholestring + line
+                                linecounter = linecounter +1
+                            self.typewin.refresh()
             # enter has been pushed, back to normal window sizes
             self.resizewindows(0)
 

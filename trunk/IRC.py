@@ -130,6 +130,20 @@ class IRCChannel:
         self.server = _server
         self.usersopen = 0
         self.connected = 1 # defaultwalue is that we are connected
+        self.linecount = 0
+        self.updated = 0
+
+    def page_up(self):
+        if self.linecount + 10 < len(self.lines):
+            self.linecount += 10
+        else:
+            self.linecount = len(self.lines)-1
+            
+    def page_down(self):
+        if self.linecount - 10 > 0:
+            self.linecount -= 10
+        else:
+            self.linecount = 0
 
     def add_user(self,user):
         if self.usersopen == 0:

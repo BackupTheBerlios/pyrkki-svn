@@ -59,6 +59,8 @@ class CursesGui:
 
         # nick win
         self.nickwin = curses.newwin(y-2,13,0,x-13) # should also be dynamic
+
+        self.textbuffer = EditBuffer() # edit buffer for text input
         
         # list of our window (channel)
         self.mwindows = list()
@@ -72,7 +74,7 @@ class CursesGui:
 
     def update_status(self):
         # update the status bar
-        self.statuswin.clear()
+        self.statuswin.erase()
         chan = self.mwindows[self.active_mwindow]
         channelsupdated = ''
         for channel in self.mwindows:
@@ -82,10 +84,11 @@ class CursesGui:
         self.statuswin.addstr(0,0,'['+chan.server+'] '+chan.name+' '+str(self.mwindows.index(chan))+' '+channelsupdated)
 
     def update_nickwin(self):
-        self.nickwin.clear()
+        self.nickwin.erase()
         chan = self.mwindows[self.active_mwindow]
         x = 0
         maxy,maxx = self.scr.getmaxyx()
+        maxy = (maxy - (len(self.textbuffer.lines)-1))
         for user in chan.users:
             self.nickwin.addstr(x,0,user.status+user.nick)
             x = x + 1
@@ -93,7 +96,8 @@ class CursesGui:
                 break
         self.nickwin.refresh()
         
-    def resizewindows(self,numlines=0):
+    def resizewindows(self):
+        numlines = ((len(self.textbuffer.lines)-1))
         if numlines < 1:
             numlines = 0
 
@@ -177,7 +181,7 @@ class CursesGui:
         
         # This is fucked up. Write better when time
         # first clear the window
-        self.messagewin.clear()
+        self.messagewin.erase()
         lines = channel.lines[:(len(channel.lines)-channel.linecount)]
         mwy,mwx = self.messagewin.getmaxyx()
         currentline = 0
@@ -254,15 +258,14 @@ class CursesGui:
         pirssion = 1
         # lets take some key input this just a quick method. Remember to fix later
         while pirssion == 1:
-            textbuffer = EditBuffer()
             enterpushed = 0
             oldlen = 0
             gotalt = 0 # for alt characters
-
+            self.textbuffer.reset()
             while enterpushed == 0:
                 isinlist = 0
                 ty,tx = self.typewin.getmaxyx()
-                ch = self.typewin.getch(textbuffer.y,textbuffer.x)
+                ch = self.typewin.getch(self.textbuffer.y,self.textbuffer.x)
                 if ch > 0:
                     if ch == 10: # enter
                         enterpushed = 1
@@ -289,11 +292,11 @@ class CursesGui:
                         if name.startswith("M-") or name.startswith("m-") or name.startswith("^["): # get alt/meta
                             gotalt = 1
                         if ch > 0:
-                            lines = textbuffer.input(ch,ty,tx)
+                            lines = self.textbuffer.input(ch,ty,tx)
                             # update the typewindow
-                            self.typewin.clear()
+                            self.typewin.erase()
                             if len(lines) != oldlen:
-                                self.resizewindows(len(lines)-1)
+                                self.resizewindows()
                                 oldlen = len(lines)
                             linecounter = 0
                             wholestring = ''
@@ -303,7 +306,7 @@ class CursesGui:
                                 linecounter = linecounter +1
                             self.typewin.refresh()
             # enter has been pushed, back to normal window sizes
-            self.resizewindows(0)
+            self.resizewindows()
 
             #put our message to channel or status screen
             self.putmessagetoscreen(wholestring)
@@ -337,6 +340,14 @@ class EditBuffer:
         self.y = 0
         self.cursormove = 0 # not move cursor
 
+    def reset(self): # reset the editbuffer
+        self.lines = list()
+        self.lines.append('') # first line
+        self.pointer = 0
+        self.x = 1
+        self.y = 0
+        self.cursormove = 0 # not move cursor
+        
     def add_char(self, ch):
         li = self.lines[self.y]
         self.lines[self.y] = li[:self.x-1]+ch+li[self.x-1:]
